@@ -1,0 +1,22 @@
+Evaluation Metrics
+==================
+
+Number of images: 13
+Average PSNR: 25.79 ± 2.45 dB
+Average SSIM: 0.8346 ± 0.0899
+
+Individual Scores:
+-----------------
+Image 1: PSNR=27.03 dB, SSIM=0.8894
+Image 2: PSNR=26.35 dB, SSIM=0.8814
+Image 3: PSNR=26.19 dB, SSIM=0.8328
+Image 4: PSNR=24.71 dB, SSIM=0.7807
+Image 5: PSNR=20.54 dB, SSIM=0.6802
+Image 6: PSNR=21.87 dB, SSIM=0.6299
+Image 7: PSNR=27.31 dB, SSIM=0.9071
+Image 8: PSNR=25.39 dB, SSIM=0.8312
+Image 9: PSNR=29.15 dB, SSIM=0.9409
+Image 10: PSNR=29.18 dB, SSIM=0.9387
+Image 11: PSNR=27.49 dB, SSIM=0.8922
+Image 12: PSNR=26.12 dB, SSIM=0.8331
+Image 13: PSNR=23.94 dB, SSIM=0.8121
