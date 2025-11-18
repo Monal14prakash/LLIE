@@ -34,7 +34,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Download Pre-trained Model
-[Download best_model.pth](YOUR_DOWNLOAD_LINK) and place in `checkpoints/`
+[Download best_model.pth](https://drive.google.com/file/d/1Um04-W_75WF-aWcWwoOzF0tWx5MBeVmN/view?usp=drive_link) and place in `checkpoints/`
 
 ### 4. Run Demo
 ```bash
