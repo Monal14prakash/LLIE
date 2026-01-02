@@ -103,3 +103,4 @@ class ColorLoss(nn.Module):
         loss_v = self.criterion(output_v, target_v)
         
         return loss_s + loss_v
+#trying to push this 
