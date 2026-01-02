@@ -9,7 +9,7 @@ from tqdm import tqdm
 import os
 from pathlib import Path
 import argparse
-
+from losses import PerceptualLoss, ColorLoss #added after colab model failed
 from generator import UNetGenerator
 from discriminator import PatchGANDiscriminator
 from data_loader import get_data_loaders
@@ -31,6 +31,15 @@ class GANTrainer:
         # Loss functions
         self.criterion_GAN = nn.BCEWithLogitsLoss()
         self.criterion_L1 = nn.L1Loss()
+        self.criterion_perceptual = PerceptualLoss(device=self.device)  # NEW
+        self.criterion_color = ColorLoss()  # NEW
+
+
+        print("✅ Initialized losses:")
+        print("   - Adversarial (GAN)")
+        print("   - L1 (pixel-wise)")
+        print("   - Perceptual (VGG features)")
+        print("   - Color (saturation/brightness)")
         
         # Optimizers
         self.optimizer_G = optim.Adam(
@@ -83,42 +92,76 @@ class GANTrainer:
             real_label = torch.ones(pred_shape).to(self.device)
             fake_label = torch.zeros(pred_shape).to(self.device)
             
+            # ==================
             # Train Discriminator
+            # ==================
             self.optimizer_D.zero_grad()
+            
+            # Generate fake images
             fake_imgs = self.generator(low_imgs)
+            
+            # Real loss
             pred_real = self.discriminator(high_imgs)
             loss_real = self.criterion_GAN(pred_real, real_label)
+            
+            # Fake loss
             pred_fake = self.discriminator(fake_imgs.detach())
             loss_fake = self.criterion_GAN(pred_fake, fake_label)
+            
+            # Total discriminator loss
             loss_D = (loss_real + loss_fake) * 0.5
             loss_D.backward()
             self.optimizer_D.step()
             
+            # ==================
             # Train Generator
+            # ==================
             self.optimizer_G.zero_grad()
+            
+            # Generate fake images again
             fake_imgs = self.generator(low_imgs)
+            
+            # Adversarial loss
             pred_fake = self.discriminator(fake_imgs)
             loss_GAN = self.criterion_GAN(pred_fake, real_label)
+            
+            # Reconstruction losses
             loss_L1 = self.criterion_L1(fake_imgs, high_imgs)
-            loss_G = loss_GAN + (self.config['lambda_L1'] * loss_L1)
+            loss_perceptual = self.criterion_perceptual(fake_imgs, high_imgs)
+            loss_color = self.criterion_color(fake_imgs, high_imgs)
+            
+            # Combined generator loss
+            loss_G = loss_GAN + \
+                    (self.config['lambda_L1'] * loss_L1) + \
+                    (self.config.get('lambda_perceptual', 10) * loss_perceptual) + \
+                    (self.config.get('lambda_color', 5) * loss_color)
+            
             loss_G.backward()
             self.optimizer_G.step()
             
+            # Accumulate losses
             epoch_g_loss += loss_G.item()
             epoch_d_loss += loss_D.item()
             
+            # Update progress bar
             pbar.set_postfix({
                 'G_loss': f"{loss_G.item():.4f}",
                 'D_loss': f"{loss_D.item():.4f}",
-                'L1': f"{loss_L1.item():.4f}"
+                'L1': f"{loss_L1.item():.4f}",
+                'Perc': f"{loss_perceptual.item():.4f}",
+                'Color': f"{loss_color.item():.4f}"
             })
             
+            # Log to tensorboard
             step = epoch * len(self.train_loader) + batch_idx
             self.writer.add_scalar('Train/G_loss', loss_G.item(), step)
             self.writer.add_scalar('Train/D_loss', loss_D.item(), step)
             self.writer.add_scalar('Train/L1_loss', loss_L1.item(), step)
+            self.writer.add_scalar('Train/Perceptual_loss', loss_perceptual.item(), step)
+            self.writer.add_scalar('Train/Color_loss', loss_color.item(), step)
         
         return epoch_g_loss / len(self.train_loader), epoch_d_loss / len(self.train_loader)
+        
     
     def validate(self, epoch):
         """Validate the model"""
@@ -202,6 +245,8 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.0002)
     parser.add_argument('--lambda_L1', type=int, default=100)
+    parser.add_argument('--lambda_perceptual', type=int, default=10)  # NEW
+    parser.add_argument('--lambda_color', type=int, default=5)  # NEW
     parser.add_argument('--save_freq', type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=2)
     
