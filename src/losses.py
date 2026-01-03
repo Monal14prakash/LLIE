@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
+
 class PerceptualLoss(nn.Module):
     """
     VGG-based perceptual loss
@@ -14,22 +15,24 @@ class PerceptualLoss(nn.Module):
     def __init__(self, device='cpu'):
         super(PerceptualLoss, self).__init__()
         
+        self.device = device  # ADD THIS LINE
+        
         # Load pretrained VGG16
         vgg = models.vgg16(pretrained=True)
         
         # Use features up to conv3_3 (layer 16)
-        # This captures mid-level features (edges, textures)
         self.feature_extractor = vgg.features[:16].to(device).eval()
         
-        # Freeze VGG parameters (don't train it)
+        # Freeze VGG parameters
         for param in self.feature_extractor.parameters():
             param.requires_grad = False
         
         self.criterion = nn.L1Loss()
         
         # Normalization values for VGG (ImageNet stats)
-        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        # MOVE THESE TO DEVICE
+        self.mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device)
+        self.std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(device)
     
     def normalize_vgg(self, x):
         """
