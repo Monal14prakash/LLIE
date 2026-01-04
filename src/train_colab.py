@@ -92,36 +92,44 @@ class GANTrainer:
             real_label = torch.ones(pred_shape).to(self.device)
             fake_label = torch.zeros(pred_shape).to(self.device)
             
+            # ==========================================
+            # Train Discriminator MULTIPLE TIMES (3x)
+            # ==========================================
+            d_losses = []
+            for d_iter in range(3):  # Train discriminator 3 times
+                self.optimizer_D.zero_grad()
+                
+                # Generate fake images (detach from generator graph)
+                with torch.no_grad():
+                    fake_imgs = self.generator(low_imgs)
+                
+                # Real loss
+                pred_real = self.discriminator(high_imgs)
+                loss_real = self.criterion_GAN(pred_real, real_label)
+                
+                # Fake loss
+                pred_fake = self.discriminator(fake_imgs.detach())
+                loss_fake = self.criterion_GAN(pred_fake, fake_label)
+                
+                # Total discriminator loss
+                loss_D = (loss_real + loss_fake) * 0.5
+                loss_D.backward()
+                self.optimizer_D.step()
+                
+                d_losses.append(loss_D.item())
+            
+            # Average D loss for logging
+            avg_d_loss = sum(d_losses) / len(d_losses)
+            
             # ==================
-            # Train Discriminator
+            # Train Generator ONCE
             # ==================
-            self.optimizer_D.zero_grad()
+            self.optimizer_G.zero_grad()
             
             # Generate fake images
             fake_imgs = self.generator(low_imgs)
             
-            # Real loss
-            pred_real = self.discriminator(high_imgs)
-            loss_real = self.criterion_GAN(pred_real, real_label)
-            
-            # Fake loss
-            pred_fake = self.discriminator(fake_imgs.detach())
-            loss_fake = self.criterion_GAN(pred_fake, fake_label)
-            
-            # Total discriminator loss
-            loss_D = (loss_real + loss_fake) * 0.5
-            loss_D.backward()
-            self.optimizer_D.step()
-            
-            # ==================
-            # Train Generator
-            # ==================
-            self.optimizer_G.zero_grad()
-            
-            # Generate fake images again
-            fake_imgs = self.generator(low_imgs)
-            
-            # Adversarial loss
+            # Adversarial loss (fool discriminator)
             pred_fake = self.discriminator(fake_imgs)
             loss_GAN = self.criterion_GAN(pred_fake, real_label)
             
@@ -130,23 +138,23 @@ class GANTrainer:
             loss_perceptual = self.criterion_perceptual(fake_imgs, high_imgs)
             loss_color = self.criterion_color(fake_imgs, high_imgs)
             
-            # Combined generator loss
+            # Combined generator loss (slightly reduced perceptual/color weights)
             loss_G = loss_GAN + \
                     (self.config['lambda_L1'] * loss_L1) + \
-                    (self.config.get('lambda_perceptual', 10) * loss_perceptual) + \
-                    (self.config.get('lambda_color', 5) * loss_color)
+                    (self.config.get('lambda_perceptual', 5) * loss_perceptual) + \
+                    (self.config.get('lambda_color', 3) * loss_color)
             
             loss_G.backward()
             self.optimizer_G.step()
             
             # Accumulate losses
             epoch_g_loss += loss_G.item()
-            epoch_d_loss += loss_D.item()
+            epoch_d_loss += avg_d_loss
             
             # Update progress bar
             pbar.set_postfix({
                 'G_loss': f"{loss_G.item():.4f}",
-                'D_loss': f"{loss_D.item():.4f}",
+                'D_loss': f"{avg_d_loss:.4f}",
                 'L1': f"{loss_L1.item():.4f}",
                 'Perc': f"{loss_perceptual.item():.4f}",
                 'Color': f"{loss_color.item():.4f}"
@@ -155,13 +163,12 @@ class GANTrainer:
             # Log to tensorboard
             step = epoch * len(self.train_loader) + batch_idx
             self.writer.add_scalar('Train/G_loss', loss_G.item(), step)
-            self.writer.add_scalar('Train/D_loss', loss_D.item(), step)
+            self.writer.add_scalar('Train/D_loss', avg_d_loss, step)
             self.writer.add_scalar('Train/L1_loss', loss_L1.item(), step)
             self.writer.add_scalar('Train/Perceptual_loss', loss_perceptual.item(), step)
             self.writer.add_scalar('Train/Color_loss', loss_color.item(), step)
         
         return epoch_g_loss / len(self.train_loader), epoch_d_loss / len(self.train_loader)
-        
     
     def validate(self, epoch):
         """Validate the model"""
@@ -236,8 +243,8 @@ class GANTrainer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--low_dir', type=str, required=True)
-    parser.add_argument('--high_dir', type=str, required=True)
+    parser.add_argument('--low_dir', type=str, default='data/processed/low')
+    parser.add_argument('--high_dir', type=str, default='data/processed/high')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints')
     parser.add_argument('--log_dir', type=str, default='runs/gan_training')
     parser.add_argument('--batch_size', type=int, default=16)
