@@ -2,8 +2,6 @@
 
 Brighten low-light images using Generative Adversarial Networks (U-Net Generator + PatchGAN Discriminator).
 
-![Demo](results/comparison_000.png)
-
 ## 🎯 Features
 
 - **Deep Learning**: GAN-based image enhancement
